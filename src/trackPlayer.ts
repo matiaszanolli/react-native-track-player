@@ -2,7 +2,6 @@ import {
   AppRegistry,
   DeviceEventEmitter,
   NativeEventEmitter,
-  NativeModules,
   Platform,
 } from 'react-native';
 
@@ -19,92 +18,9 @@ import type {
   UpdateOptions,
 } from './interfaces';
 
+import resolveAssetSource from './resolveAssetSource';
+import TrackPlayer from './TrackPlayerModule';
 
-type ImageInfo = {
-  type?: string;
-  bpc?: number;
-  width: number;
-  height: number;
-  cps?: number;
-};
-
-var resolveAssetSource: Function | undefined = undefined;
-
-function atobTS(input: string): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
-  
-  let str = input.replace(/=+$/, '');
-  let output = '';
-
-  if (str.length % 4 === 1) {
-      throw new Error("'atob' failed: The string to be decoded is not correctly encoded.");
-  }
-
-  for (let bc = 0, bs = 0, buffer, i = 0;
-      buffer = str.charAt(i++);
-      ~buffer && (bs = bc % 4 ? bs * 64 + buffer : buffer, bc++ % 4) ? output += String.fromCharCode(255 & bs >> (-2 * bc & 6)) : 0
-  ) {
-      buffer = chars.indexOf(buffer);
-  }
-
-  return output;
-}
-
-if (Platform.OS !== 'web') {
-  resolveAssetSource = require('react-native/Libraries/Image/resolveAssetSource');
-} else {
-  resolveAssetSource = (base64: string): ImageInfo | undefined => {
-    // Strip tag png
-    if (base64.indexOf('data:image/png;') >= 0) {
-      base64 = base64.substring(base64.indexOf(',') + 1);
-
-      const header = atobTS(base64.slice(0, 50)).slice(16, 24);
-      const uint8 = Uint8Array.from(header, (c) => c.charCodeAt(0));
-      const dataView = new DataView(uint8.buffer);
-
-      return {
-        width: dataView.getInt32(0),
-        height: dataView.getInt32(4),
-      };
-    }
-
-    // Strip tag for jpeg
-    if (base64.indexOf('data:image/jpeg;') >= 0) {
-      base64 = base64.substring(base64.indexOf(',') + 1);
-
-      const bindata = atobTS(base64);
-      const data = Uint8Array.from(bindata, (c) => c.charCodeAt(0));
-
-      let off = 0;
-      while (off < data.length) {
-        while (data[off] === 0xff) off++;
-        const mrkr = data[off];
-        off++;
-
-        if (mrkr === 0xd8) continue; // SOI
-        if (mrkr === 0xd9) break; // EOI
-        if (0xd0 <= mrkr && mrkr <= 0xd7) continue;
-        if (mrkr === 0x01) continue; // TEM
-
-        const len = (data[off] << 8) | data[off + 1];
-        off += 2;
-
-        if (mrkr === 0xc0) {
-          return {
-            type: 'jpeg',
-            bpc: data[off], // precision (bits per channel)
-            width: (data[off + 1] << 8) | data[off + 2],
-            height: (data[off + 3] << 8) | data[off + 4],
-            cps: data[off + 5], // number of color components
-          };
-        }
-        off += len - 2;
-      }
-    }
-  };
-}
-
-const { TrackPlayerModule: TrackPlayer } = NativeModules;
 const emitter =
   Platform.OS !== 'android'
     ? new NativeEventEmitter(TrackPlayer)
@@ -142,6 +58,8 @@ export function registerPlaybackService(factory: () => ServiceHandler) {
   if (Platform.OS === 'android') {
     // Registers the headless task
     AppRegistry.registerHeadlessTask('TrackPlayer', factory);
+  } else if (Platform.OS === 'web') {
+    factory()();
   } else {
     // Initializes and runs the service in the next tick
     setImmediate(factory());
