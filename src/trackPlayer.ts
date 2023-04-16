@@ -8,6 +8,8 @@ import {
 
 if (Platform.OS !== 'web') {
   const resolveAssetSource = require('react-native/Libraries/Image/resolveAssetSource');
+} else {
+  const resolveAssetSource = require('react-native-web/Libraries/Image/resolveAssetSource');
 }
 
 import { Event, RepeatMode, State } from './constants';
