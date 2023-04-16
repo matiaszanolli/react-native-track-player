@@ -5,8 +5,10 @@ import {
   NativeModules,
   Platform,
 } from 'react-native';
-// @ts-expect-error because resolveAssetSource is untyped
-import { default as resolveAssetSource } from 'react-native/Libraries/Image/resolveAssetSource';
+
+if (Platform.OS !== 'web') {
+  const resolveAssetSource = require('react-native/Libraries/Image/resolveAssetSource');
+}
 
 import { Event, RepeatMode, State } from './constants';
 import type {
